@@ -7,12 +7,12 @@ For example, by adding this program to the next step of the COBOL compiler step,
 This program requires the JZOS function of z/OS Java to submit JCL and read temporary datesets.
 And Slack Incoming webhook URL and Legacy token for File.upload are necessary.
 
-  *Sample1: part of joblog to webhook*
-<img width="300px" src="img/sample1.png">
-  *Sample2: zip file to slack*
+  *Sample1: part of joblog to webhook*  
 <img width="300px" src="img/sample2.png">
-  *Sample3: sample JCL*
+  *Sample2: zip file to slack*  
 <img width="300px" src="img/sample3.png">
+  *Sample3: sample JCL*  
+<img width="300px" src="img/sample1.png">
 
 ---
 # Dependency
