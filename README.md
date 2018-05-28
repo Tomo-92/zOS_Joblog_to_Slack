@@ -2,17 +2,17 @@
 
 This is a sample program to send JOBLOGs in z/OS to Slack.
   
-For example, by adding this program to the next step of the COBOL compiler step, it is supposed to send the result of the compiler to Slack channel.
+For example, it is supposed to send the result of the compiler to Slack channel, by adding this program to the next step of the COBOL compiler step.
   
 This program requires the JZOS function of z/OS Java to submit JCL and read temporary datesets.
 And Slack Incoming webhook URL and Legacy token for File.upload are necessary.
 
 *Sample1: part of joblog to webhook*  
-<img width="300px" src="img/sample2.png">  
+<img width="300px" alt="slack screenshot which displays the extracted joblog" src="img/sample2.png">  
 *Sample2: zip file to slack*  
-<img width="300px" src="img/sample3.png">  
+<img width="300px" alt="slack screenshot attached zip file of joblogs" src="img/sample3.png">  
 *Sample3: sample JCL*  
-<img width="300px" src="img/sample1.png">  
+<img width="300px" alt="sample jcl includind this program's step" src="img/sample1.png">  
 
 ---
 # Dependency
@@ -51,7 +51,7 @@ export LOGLIST="JESMSGLG JESJCL JESYSMSG"
 //
 ```
   
-At least, the following environmental variables is required to set values:
+At least, the following environmental variables are required to set values:
 - CLASSPATH .. to add jar file including zslack.properties and this class files
 - JZOSLIB .. JZOS-installed Dataset
 - LOGLIST .. list of output dataset names in joblog
