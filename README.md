@@ -61,4 +61,6 @@ At least, the following environmental variables are required to set values:
 [Slack webhook](https://api.slack.com/incoming-webhooks)  
 [Slack file.upload](https://api.slack.com/methods/files.upload)  
 
+# License
+[MIT License](https://opensource.org/licenses/mit-license.php)
 
