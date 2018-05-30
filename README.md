@@ -4,7 +4,7 @@ This is a sample program to send JOBLOGs in z/OS to Slack.
   
 For example, it is supposed to send the result of the compiler to Slack channel, by adding this program to the next step of the COBOL compiler step.
   
-This program requires the JZOS function of z/OS Java to submit JCL and read temporary datesets.
+This program requires the JZOS function for retrieving JOBNAME and JOBID, and SDSF Java function.
 And Slack Incoming webhook URL and Legacy token for File.upload are necessary.
 
 *Sample1: part of joblog to webhook*  
@@ -35,7 +35,7 @@ Download all files and create jar file as follows:
 Add the below job-step to a JCL you want to send the joblog to Slack:
 ```JCL step
 //JAVAJVM  EXEC PGM=JVMLDM86,
-//         PARM='zslack.SLSubmitter'
+//         PARM='zslack.SLSendMainC'
 //STEPLIB  DD DSN=JZOS.V2R4M1.LOADLIB,DISP=SHR
 //SYSPRINT DD SYSOUT=* < System stdout
 //SYSOUT   DD SYSOUT=* < System stderr
@@ -44,16 +44,15 @@ Add the below job-step to a JCL you want to send the joblog to Slack:
 //STDENV   DD *
 export JAVA_HOME=/usr/lpp/java/J8.0_64
 export CLASSPATH=/installed-path/zslack.jar:$CLASSPATH
+export CLASSPATH=/usr/include/java_classes/isfjcall.jar:$CLASSPATH
 PATH=$JAVA_HOME/bin:$PATH
-export LIBPATH=$JAVA_HOME/bin/j9vm:$LIBPATH
-export JZOSLIB=JZOS.V2R4M1.LOADLIB
+export LIBPATH=$JAVA_HOME/bin/j9vm:/usr/lib/java_runtime64:$LIBPATH
 export LOGLIST="JESMSGLG JESJCL JESYSMSG"
 //
 ```
   
 At least, the following environmental variables are required to set values:
 - CLASSPATH .. to add jar file including zslack.properties and this class files
-- JZOSLIB .. JZOS-installed Dataset
 - LOGLIST .. list of output dataset names in joblog
 
 # Reference

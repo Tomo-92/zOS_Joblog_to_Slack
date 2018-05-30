@@ -1,12 +1,13 @@
 package zslack ;
 
-import com.ibm.jzos.* ;
 import java.io.* ;
-import java.util.* ;
 import java.util.zip.* ;
 import java.net.* ;
+import java.util.* ;
+import com.ibm.jzos.* ;
+import com.ibm.zos.sdsf.core.* ;
 
-public class SLSendMainB {
+public class SLSendMainC {
 	public String encoding_in = "Cp939" ;
 	public String encoding_out = "UTF-8" ;
 	public int limitsize = 0 ;
@@ -16,8 +17,9 @@ public class SLSendMainB {
 	public static String crlf = "\r\n" ;
 
 	public static void main(String[] args) throws Exception {
-		(new SLSendMainB()).main2(args) ;
+		(new SLSendMainC()).main2(args) ;
 	}
+
 	public void main2(String[] args) throws Exception {
 		checkArgs(args) ;
 		ByteArrayOutputStream baos = new ByteArrayOutputStream() ;
@@ -29,42 +31,60 @@ public class SLSendMainB {
 			_filter_res = new StringBuilder(1024) ;
 		}
 
-		for(int i=0;i<p._logs.size(); i++) {
-			String s = (String)p._logs.get(i) ;
-			if (s.endsWith(".txt")) {
-				zos.putNextEntry(new ZipEntry(s)) ;
-			}else {
-				zos.putNextEntry(new ZipEntry(s+".txt")) ;
-			}
-			ZFile zf = new ZFile("//DD:WORK"+(i+1), "rb,type=record,noseek") ;
-			byte[] recbuf = new byte[zf.getLrecl()] ;
-			int nread = 0 ;
-			String line = null ;
-			boolean flag = false ;
-			while((nread = zf.read(recbuf)) > 0) {
-				while(nread>0 && recbuf[nread-1] == (byte)0x40) nread-- ;
-				line = new String(recbuf,0,nread,encoding_in) ;
-				zos.write((line+"\n").getBytes(encoding_out)) ;
-				if (_FILTER!=null&&line.matches(_FILTER)) {
-					if (!flag) { flag = true ; _filter_res.append("```") ;}
-					_filter_res.append(line).append("\n") ;
+		ISFRequestSettings settings = new ISFRequestSettings();
+		settings.addISFPrefix("**");
+		settings.addISFOwner("*");
+		settings.addISFFilter("jname eq " + p.getp("JOBNAME") + " jobid eq " + p.getp("JOBID")) ;
+
+		ISFStatusRunner runner = new ISFStatusRunner(settings);
+		List<ISFStatus> objs = null;
+		ISFRequestResults reqres = null ;
+
+		objs = runner.exec();
+		reqres = runner.getRequestResults() ;
+
+		if (objs.size() == 1) {
+			ISFStatus stat1 = objs.get(0) ;
+			List<ISFJobDataSet> list1 = stat1.getJobDataSets() ;
+			for (ISFJobDataSet ds : list1) {
+				if (p._logs.contains(ds.getDDName())) {
+					ds.browse() ;
+					List<String> response = reqres.getResponseList() ;
+					zos.putNextEntry(new ZipEntry(ds.getDDName()+".txt")) ;
+					boolean flag = false ;
+					for(String str : response) {
+						int i = str.length() -1 ;
+						for( ;i>0 && str.charAt(i) == ' ';i--) ;
+						if (i < str.length()-1) str = str.substring(0, i+1) ;
+						zos.write((str+"\n").getBytes(encoding_out)) ;
+						if (_FILTER!=null&&str.matches(_FILTER)) {
+							if (!flag) { flag = true ; _filter_res.append("```") ;}
+							_filter_res.append(str).append("\n") ;
+						}
+					}
+					if (flag) { flag = false ; _filter_res.append("```\n") ;}
+				}else {
+					System.out.println("=== not target : " + ds.getDDName()) ;
 				}
 			}
-			if (flag) { flag = false ; _filter_res.append("```\n") ;}
-			zf.close() ;
-		}
-		zos.close() ;
-		senderB(p.getp("SLACK_CHANNEL"), "archives.zip", p.getp("TITLE"), p.getp("COMMENT"), baos.toByteArray()) ;
-		if (_filter_res != null) {
-			System.out.println("--webhook--") ;
-			if (_filter_res.length() > 0) {
-				String ret = SLSimplesend.send(_filter_res.toString()) ;
-				System.out.println(ret) ;
-			}else {
-				System.out.println(" no matching lines: [filter="+_FILTER+"]") ;
+			zos.close() ;
+
+			senderB(p.getp("SLACK_CHANNEL"), "archives.zip", p.getp("TITLE"), p.getp("COMMENT"), baos.toByteArray()) ;
+			if (_filter_res != null) {
+				System.out.println("--webhook--") ;
+				if (_filter_res.length() > 0) {
+					String ret = SLSimplesend.send(_filter_res.toString()) ;
+					System.out.println(ret) ;
+				}else {
+					System.out.println(" no matching lines: [filter="+_FILTER+"]") ;
+				}
 			}
+		}else {
+			System.out.println("objsize = " + objs.size()) ;
 		}
+
 	}
+
 
 	public void senderB(String channels, String filename, String title, String comment, byte[] buf) throws Exception {
 		String boundary = makeBoundary() ;
@@ -135,7 +155,6 @@ public class SLSendMainB {
 		total += writestr(os, crlf + "--" + boundary + "--" + crlf) ;
 		return total ;
 	}
-
 	public int writestr(OutputStream os, String str) throws IOException {
 		byte[] btmp = str.getBytes(encoding_out) ;
 		if (limitsize > 0 && btmp.length > limitsize) {
@@ -170,5 +189,16 @@ public class SLSendMainB {
 		if (!p.isNull("MSG_LENGTH")) {
 			try {limitsize = Integer.parseInt(p.getp("MSG_LENGTH")) ;}catch(Exception e){}
 		}
+		if (p.isNull("JOBNAME")) { p.setProperty("JOBNAME", ZUtil.getCurrentJobname());}
+		if (p.isNull("JOBID")) p.setProperty("JOBID", ZUtil.getCurrentJobId()) ;
+		if (p._logs.size() == 0) printerrmsg("LOGLIST IS NULL...") ;
+	}
+
+	public static void printerr(String str) {
+		printerrmsg(str+" is missing..") ;
+	}
+	public static void printerrmsg(String str) {
+		System.err.println("SLSubmitter: "+str) ;
+		System.exit(1) ;
 	}
 }
