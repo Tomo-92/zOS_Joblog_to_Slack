@@ -6,11 +6,11 @@ z/OS上のJOBLOGをSlackに送信するサンプルプログラムです。
   
 このプログラムは、JavaからJOB名を取得するためにJZOS機能を使い、z/OS1.12以降で提供されるJava SDSFインターフェースも使います。また、Slackとの連携のために、JOBLOGをzipで固めたものをFile.uploadでアップロードするときに使用するレガシー・トークンと、JOBLOGの一部を抜粋したものをメッセージとして表示するためにIncoming webhook URLが必要です。  
 *Sample1: Slack Incoming webhook でJOBLOGの一部を出力*  
-<img width="300px" alt="JOBLOG一時表示のSlackのスクリーンショット" src="img/sample2.png">  
+<img width="400px" alt="JOBLOG一時表示のSlackのスクリーンショット" src="img/sample1.png">  
 *Sample2: JOBLOGを固めたzipファイルをFile.uploadでアップロード*  
-<img width="300px" alt="zipファイルのアップロードのスクリーンショット" src="img/sample3.png">  
+<img width="400px" alt="zipファイルのアップロードのスクリーンショット" src="img/sample2.png">  
 *Sample3: サンプルJCL（COBOLコンパイルステップと、このプログラムを起動するステップ）*  
-<img width="300px" alt="サンプルJCL（このプログラムを起動するステップを含む）" src="img/sample1.png">  
+<img width="400px" alt="サンプルJCL（このプログラムを起動するステップを含む）" src="img/sample3.png">  
 
 ---
 # 稼働に必要なもの

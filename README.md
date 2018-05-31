@@ -8,11 +8,11 @@ This program requires the JZOS function for retrieving JOBNAME and JOBID, and SD
 And Slack Incoming webhook URL and Legacy token for File.upload are necessary.
 
 *Sample1: part of joblog to webhook*  
-<img width="300px" alt="slack screenshot which displays the extracted joblog" src="img/sample2.png">  
+<img width="400px" alt="slack screenshot which displays the extracted joblog" src="img/sample1.png">  
 *Sample2: zip file to slack*  
-<img width="300px" alt="slack screenshot attached zip file of joblogs" src="img/sample3.png">  
+<img width="400px" alt="slack screenshot attached zip file of joblogs" src="img/sample2.png">  
 *Sample3: sample JCL*  
-<img width="300px" alt="sample jcl includind this program's step" src="img/sample1.png">  
+<img width="400px" alt="sample jcl includind this program's step" src="img/sample3.png">  
 
 ---
 # Dependency
