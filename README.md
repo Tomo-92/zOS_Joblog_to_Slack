@@ -1,6 +1,6 @@
 # zOS_Joblog_to_Slack
 
-This is a sample program to send JOBLOGs in z/OS to Slack.
+This is a sample program to send JOBLOGs to Slack channel from z/OS.
   
 For example, it is supposed to send the result of the compiler to Slack channel, by adding this program to the next step of the COBOL compiler step.
   
