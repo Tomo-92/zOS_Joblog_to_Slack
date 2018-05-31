@@ -1,35 +1,52 @@
 package zslack ;
 
-import java.io.* ;
-import java.util.zip.* ;
-import java.net.* ;
-import java.util.* ;
-import com.ibm.jzos.* ;
-import com.ibm.zos.sdsf.core.* ;
+import java.io.IOException ;
+import java.io.InputStreamReader ;
+import java.io.OutputStream ;
+import java.io.ByteArrayOutputStream ;
+import java.io.BufferedReader ;
+import java.net.URL ;
+import java.net.HttpURLConnection ;
+import java.util.List ;
+import java.util.zip.ZipOutputStream ;
+import java.util.zip.ZipEntry ;
+import com.ibm.jzos.ZUtil ;
+import com.ibm.zos.sdsf.core.ISFRequestSettings ;
+import com.ibm.zos.sdsf.core.ISFStatusRunner ;
+import com.ibm.zos.sdsf.core.ISFStatus ;
+import com.ibm.zos.sdsf.core.ISFRequestResults ;
+import com.ibm.zos.sdsf.core.ISFJobDataSet ;
+
 
 public class SLSendMainC {
-	public String encoding_in = "Cp939" ;
-	public String encoding_out = "UTF-8" ;
-	public int limitsize = 0 ;
-	public String _RC = null ;
-	SLProperties p = null ;
+	static final String encoding_in = "Cp939" ;
+	static final String encoding_out = "UTF-8" ;
+	static final String CRLF = "\r\n" ;
+	static final String CR = "\n" ;
+	static final String DQ = "\"" ;
 
-	public static String crlf = "\r\n" ;
+	int limitsize = 0 ;
+	String _RC = null ;
+	SLProperties p = null ;
 
 	public static void main(String[] args) throws Exception {
 		(new SLSendMainC()).main2(args) ;
+	}
+
+	public String getFilter() {
+		if (!p.isNull("SLACK_WEBHOOK")&&!p.isNull("SLACK_WEBHOOK_REGEX")){
+			return ".*"+p.getp("SLACK_WEBHOOK_REGEX")+".*" ;
+		}else {
+			return null ;
+		}
 	}
 
 	public void main2(String[] args) throws Exception {
 		checkArgs(args) ;
 		ByteArrayOutputStream baos = new ByteArrayOutputStream() ;
 		ZipOutputStream zos = new ZipOutputStream(baos) ;
-		String _FILTER = null ;
-		StringBuilder _filter_res = null ;
-		if (!p.isNull("SLACK_WEBHOOK")&&!p.isNull("SLACK_WEBHOOK_REGEX")){
-			_FILTER = ".*"+p.getp("SLACK_WEBHOOK_REGEX")+".*" ;
-			_filter_res = new StringBuilder(1024) ;
-		}
+		String _FILTER = getFilter() ;
+		StringBuilder _filter_res = (_FILTER == null ? null : new StringBuilder(2014)) ;
 
 		ISFRequestSettings settings = new ISFRequestSettings();
 		settings.addISFPrefix("**");
@@ -37,11 +54,8 @@ public class SLSendMainC {
 		settings.addISFFilter("jname eq " + p.getp("JOBNAME") + " jobid eq " + p.getp("JOBID")) ;
 
 		ISFStatusRunner runner = new ISFStatusRunner(settings);
-		List<ISFStatus> objs = null;
-		ISFRequestResults reqres = null ;
-
-		objs = runner.exec();
-		reqres = runner.getRequestResults() ;
+		List<ISFStatus> objs = runner.exec() ;
+		ISFRequestResults reqres = runner.getRequestResults() ;
 
 		if (objs.size() == 1) {
 			ISFStatus stat1 = objs.get(0) ;
@@ -56,105 +70,128 @@ public class SLSendMainC {
 						int i = str.length() -1 ;
 						for( ;i>0 && str.charAt(i) == ' ';i--) ;
 						if (i < str.length()-1) str = str.substring(0, i+1) ;
-						zos.write((str+"\n").getBytes(encoding_out)) ;
+						zos.write((str+CR).getBytes(encoding_out)) ;
 						if (_FILTER!=null&&str.matches(_FILTER)) {
 							if (!flag) { flag = true ; _filter_res.append("```") ;}
-							_filter_res.append(str).append("\n") ;
+							_filter_res.append(str).append(CR) ;
 						}
 					}
-					if (flag) { flag = false ; _filter_res.append("```\n") ;}
+					if (flag) { flag = false ; _filter_res.append("```").append(CR) ;}
 				}else {
 					System.out.println("=== not target : " + ds.getDDName()) ;
 				}
 			}
 			zos.close() ;
-
-			senderB(p.getp("SLACK_CHANNEL"), "archives.zip", p.getp("TITLE"), p.getp("COMMENT"), baos.toByteArray()) ;
-			if (_filter_res != null) {
-				System.out.println("--webhook--") ;
-				if (_filter_res.length() > 0) {
-					String ret = SLSimplesend.send(_filter_res.toString()) ;
-					System.out.println(ret) ;
-				}else {
-					System.out.println(" no matching lines: [filter="+_FILTER+"]") ;
-				}
-			}
+			send_fileupload(baos.toByteArray()) ;
+			if (_filter_res != null) send_webhook(_filter_res.toString()) ;
 		}else {
 			System.out.println("objsize = " + objs.size()) ;
 		}
 
 	}
 
+	public void send_webhook(String message) throws IOException {
+		if ("".equals(message)) {System.out.println("message is empty"); return ;}
 
-	public void senderB(String channels, String filename, String title, String comment, byte[] buf) throws Exception {
-		String boundary = makeBoundary() ;
-		OutputStream os = null ;
-		if (filename == null) filename = "archive" ;
+		byte[] payload = webhook_payload(message) ;
+		URL _url = new URL(p.getp("SLACK_WEBHOOK")) ;
+		HttpURLConnection con = (HttpURLConnection)_url.openConnection() ;
+		con.setRequestProperty("Content-Type", "application/json; charset="+encoding_out) ;
+		con.setDoInput(true) ;
+		con.setDoOutput(true) ;
+		con.setRequestMethod("POST") ;
+		con.setFixedLengthStreamingMode(payload.length) ;
+		con.connect() ;
+		OutputStream os = con.getOutputStream() ;
+		os.write(payload) ;
+
+		print_response("webhook", con) ;
+		con.disconnect() ;
+	}
+
+	public byte[] webhook_payload(String message) throws IOException {
+		StringBuilder sbuf = new StringBuilder(256) ;
+		sbuf.append("{") ;
+		sbuf.append(quote("text")).append(":").append(quote(message)) ;
+		if (!p.isNull("SLACK_WEBHOOK_CHANNEL")) sbuf.append(",").append(quote("channel")).append(":").append(quote(p.getp("SLACK_WEBHOOK_CHANNEL"))) ;
+		if (!p.isNull("SLACK_WEBHOOK_USERNAME"))sbuf.append(",").append(quote("username")).append(":").append(quote(p.getp("SLACK_WEBHOOK_USERNAME"))) ;
+		sbuf.append("}") ;
+		return sbuf.toString().getBytes(encoding_out) ;
+	}
+
+	String quote(String s) {
+		return DQ+s+DQ ;
+	}
+
+	public void send_fileupload(byte[] buf) throws IOException {
+		String token = p.getp("SLACK_TOKEN") ;
+		String channels = p.getp("SLACK_CHANNEL") ;
+		if (channels == null) {System.err.println("CHANNEL is undefined..") ; System.exit(0); }
+		String filename = "archives.zip" ;
+		String title = p.getp("TITLE") ;
 		if (title == null) title = "Message from z/OS" ;
-		if (comment == null) comment ="" ;
-		if (channels == null) { System.err.println("CHANNEL is undefined..") ;System.exit(0);}
+		String comment = p.getp("COMMENT") ;
+		if (comment == null) comment = "" ;
+		String url = p.getp("SLACK_FILE_URL") ;
 
-		String[] prop_name, prop_body ;
-		prop_name = new String[]{"token", "filename", "filetype", "channels", "title", "initial_comment"} ;
-		prop_body = new String[]{p.getp("SLACK_TOKEN"), filename, "zip", channels, title, comment} ;
+		String[] prop_name = new String[]{"token", "filename", "filetype", "channels", "title", "initial_comment"} ;
+		String[] prop_body = new String[]{token, filename, "zip", channels, title, comment} ;
 
-		URL _url = new URL(p.getp("SLACK_FILE_URL")) ;
-		HttpURLConnection con = null ;
+		senderC(prop_name, prop_body, url, buf) ;
+	}
 
-		int size = 0 ;
-		ByteArrayOutputStream baos = new ByteArrayOutputStream() ;
-		size = createbody_text(baos, prop_name, prop_body, boundary) ;
-		size += createbody_zip(baos, buf, boundary) ;
-		FileOutputStream fos = new FileOutputStream("/tmp/tomo/baosout.txt") ;
-		fos.write(baos.toByteArray()) ;
-		fos.close() ;
+	public void senderC(String[] prop_name, String[] prop_body, String url, byte[] buf) throws IOException {
+		String boundary = makeBoundary() ;
+		byte[] body = create_multi(boundary, prop_name, prop_body, buf) ;
 
-		con = (HttpURLConnection)_url.openConnection() ;
+		URL _url = new URL(url) ;
+		HttpURLConnection con = (HttpURLConnection)_url.openConnection() ;
 		con.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary) ;
 		con.setDoInput(true) ;
 		con.setDoOutput(true) ;
 		con.setRequestMethod("POST") ;
 
-		con.setFixedLengthStreamingMode(baos.size()) ;
+		con.setFixedLengthStreamingMode(body.length) ;
 		con.connect() ;
-		os = con.getOutputStream() ;
-		os.write(baos.toByteArray()) ;
+		OutputStream os = con.getOutputStream() ;
+		os.write(body) ;
 
-		int rc = con.getResponseCode() ;
-		String rs = con.getResponseMessage() ;
-		BufferedReader reader = new BufferedReader(new InputStreamReader(con.getInputStream(), encoding_out)) ;
-		System.out.println(">>> RESULT: RC="+rc+": " +rs) ;
-		String line = null ;
-		while((line = reader.readLine()) != null) {
-			System.out.println(line) ;
-		}
+		print_response("file.upload", con) ;
 		con.disconnect() ;
 	}
 
-	public int createbody_text(OutputStream os, String[] prop_name, String[] prop_body, String boundary) throws Exception {
+	public byte[] create_multi(String boundary, String[] keys, String[] values, byte[] buf) throws IOException {
+		ByteArrayOutputStream baos = new ByteArrayOutputStream() ;
+		createbody_text(baos, keys, values, boundary) ;
+		createbody_zip(baos, buf, boundary) ;
+		return baos.toByteArray() ;
+	}
+
+	public int createbody_text(OutputStream os, String[] prop_name, String[] prop_body, String boundary) throws IOException {
 		int total = 0 ;
 		for(int i=0;i<prop_name.length;i++) {
-			total += writestr(os, "--" + boundary + crlf) ;
-			total += writestr(os, "Content-Disposition: form-data; name=\""+prop_name[i]+"\""+crlf+crlf) ;
+			total += writestr(os, "--" + boundary + CRLF) ;
+			total += writestr(os, "Content-Disposition: form-data; name=\""+prop_name[i]+"\""+CRLF+CRLF) ;
 			byte[] btmp = prop_body[i].getBytes(encoding_out) ;
 			os.write(btmp) ;
 			total += btmp.length ;
-			total += writestr(os, crlf) ;
+			total += writestr(os, CRLF) ;
 		}
 		return total ;
 	}
 
-	public int createbody_zip(OutputStream os, byte[] buf, String boundary) throws Exception {
+	public int createbody_zip(OutputStream os, byte[] buf, String boundary) throws IOException {
 		int total = 0 ;
-		total += writestr(os, "--" + boundary + crlf) ;
-		total += writestr(os, "Content-Disposition: form-data; name=\"file\"; filename=\"archives.zip\""+crlf) ;
-		total += writestr(os, "Content-Type: application/zip"+crlf+crlf) ;
+		total += writestr(os, "--" + boundary + CRLF) ;
+		total += writestr(os, "Content-Disposition: form-data; name=\"file\"; filename=\"archives.zip\""+CRLF) ;
+		total += writestr(os, "Content-Type: application/zip"+CRLF+CRLF) ;
 
 		os.write(buf) ;
 		total += buf.length ;
-		total += writestr(os, crlf + "--" + boundary + "--" + crlf) ;
+		total += writestr(os, CRLF + "--" + boundary + "--" + CRLF) ;
 		return total ;
 	}
+
 	public int writestr(OutputStream os, String str) throws IOException {
 		byte[] btmp = str.getBytes(encoding_out) ;
 		if (limitsize > 0 && btmp.length > limitsize) {
@@ -179,6 +216,18 @@ public class SLSendMainC {
 		return ret ;
 	}
 
+	public void print_response(String header, HttpURLConnection con) throws IOException {
+		int rc = con.getResponseCode() ;
+		String rs = con.getResponseMessage() ;
+		System.out.println("---- " + header + " ----") ;
+		System.out.println(">>> RESULT: RC="+rc+": " +rs) ;
+		BufferedReader reader = new BufferedReader(new InputStreamReader(con.getInputStream(), encoding_out)) ;
+		String line = null ;
+		while((line = reader.readLine()) != null) {
+			System.out.println(line) ;
+		}
+	}
+
 	public void checkArgs(String[] args) throws IOException {
 		for(int i=0;i<args.length;i++) {
 			if ("-rc".equals(args[i])) {
@@ -194,10 +243,11 @@ public class SLSendMainC {
 		if (p._logs.size() == 0) printerrmsg("LOGLIST IS NULL...") ;
 	}
 
-	public static void printerr(String str) {
+	public void printerr(String str) {
 		printerrmsg(str+" is missing..") ;
 	}
-	public static void printerrmsg(String str) {
+
+	public void printerrmsg(String str) {
 		System.err.println("SLSubmitter: "+str) ;
 		System.exit(1) ;
 	}
