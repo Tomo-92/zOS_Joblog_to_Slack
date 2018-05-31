@@ -4,13 +4,13 @@ z/OS上のJOBLOGをSlackに送信するサンプルプログラムです。
   
 たとえば、COBOLのコンパイル結果をSlackに送信するような状況を想定しています。この場合、コンパイルのステップの次のステップとして、このプログラムをJCLに追記します。
   
-このプログラムは、JavaからJCLをサブミットしたり、一時データセットを読み込んだりしますので、z/OS JavaのJZOS機能を使用しています。また、Slackとの連携のために、JOBLOGをzipで固めたものをFile.uploadでアップロードするときに使用するレガシー・トークンと、JOBLOGの一部を抜粋したものをメッセージとして表示するためにIncoming webhook URLが必要です。
+このプログラムは、JavaからJOB名を取得するためにJZOS機能を使い、z/OS1.12以降で提供されるJava SDSFインターフェースも使います。また、Slackとの連携のために、JOBLOGをzipで固めたものをFile.uploadでアップロードするときに使用するレガシー・トークンと、JOBLOGの一部を抜粋したものをメッセージとして表示するためにIncoming webhook URLが必要です。  
 *Sample1: Slack Incoming webhook でJOBLOGの一部を出力*  
-<img width="300px" alt="JOBLOG一時表示のSlackのスクリーンショット" src="img/sample2.png">  
+<img width="400px" alt="JOBLOG一時表示のSlackのスクリーンショット" src="img/sample1.png">  
 *Sample2: JOBLOGを固めたzipファイルをFile.uploadでアップロード*  
-<img width="300px" alt="zipファイルのアップロードのスクリーンショット" src="img/sample3.png">  
+<img width="400px" alt="zipファイルのアップロードのスクリーンショット" src="img/sample2.png">  
 *Sample3: サンプルJCL（COBOLコンパイルステップと、このプログラムを起動するステップ）*  
-<img width="300px" alt="サンプルJCL（このプログラムを起動するステップを含む）" src="img/sample1.png">  
+<img width="400px" alt="サンプルJCL（このプログラムを起動するステップを含む）" src="img/sample3.png">  
 
 ---
 # 稼働に必要なもの
@@ -33,7 +33,7 @@ IBM Java 8.0 on z/OS
 JOBLOGをSlackに送信したいJCLの末尾に、以下のようなJOBLOGのステップを追加します：
 ```JCL step
 //JAVAJVM  EXEC PGM=JVMLDM86,
-//         PARM='zslack.SLSubmitter'
+//         PARM='zslack.SLSendMainC'
 //STEPLIB  DD DSN=JZOS.V2R4M1.LOADLIB,DISP=SHR
 //SYSPRINT DD SYSOUT=* < System stdout
 //SYSOUT   DD SYSOUT=* < System stderr
@@ -42,17 +42,25 @@ JOBLOGをSlackに送信したいJCLの末尾に、以下のようなJOBLOGのス
 //STDENV   DD *
 export JAVA_HOME=/usr/lpp/java/J8.0_64
 export CLASSPATH=/installed-path/zslack.jar:$CLASSPATH
+export CLASSPATH=/usr/include/java_classes/isfjcall.jar:$CLASSPATH
 PATH=$JAVA_HOME/bin:$PATH
-export LIBPATH=$JAVA_HOME/bin/j9vm:$LIBPATH
-export JZOSLIB=JZOS.V2R4M1.LOADLIB
+export LIBPATH=$JAVA_HOME/bin/j9vm:/usr/lib/java_runtime64:$LIBPATH
 export LOGLIST="JESMSGLG JESJCL JESYSMSG"
 //
 ```
   
 少なくとも、以下の環境変数を環境に合わせて設定してください：
 - CLASSPATH .. 上記で作成したjarファイルを絶対パスで含むように指定
-- JZOSLIB .. JZOSの導入されているデータセット名
 - LOGLIST .. Slackに送信したい、JOBLOG中のアウトプット・データセット名のリスト（空白区切り）
+
+# コンパイルについて
+z/OS USS上でコンパイルする場合は、isfjcall.jarをクラスパスに加えてください。  
+もし、PCやLinux上でコンパイルしたい場合は、z/OS上のisfjcall.jar(/usr/include/java_classes/isfjcall.jar)と、IBM Java for z/OSに含まれるibmjzos.jar(/usr/lpp/java/J8.0_64/lib/ext/ibmjzos.jar)をダウンロードし、クラスパスに加えてください。
+その後、以下のコマンドでコンパイルおよびJarファイルを生成してください。
+```
+javac zslack/*.java
+jar cvf zslack.jar zslack.properties zslack/*
+```
 
 # 参考URL
 [JZOS](https://www.ibm.com/support/knowledgecenter/SSYKE2_8.0.0/com.ibm.java.zsecurity.80.doc/zsecurity-component/jzos.html)  
