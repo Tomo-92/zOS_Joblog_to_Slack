@@ -55,6 +55,16 @@ At least, the following environmental variables are required to set values:
 - CLASSPATH .. to add jar file including zslack.properties and this class files
 - LOGLIST .. list of output dataset names in joblog
 
+# Compiling by yourself
+In case of compiling in z/OS USS, isfjcall.jar is required to add your CLASSPATH.  
+(CLASSPATH=$CLASSPATH:/usr/include/java_classes/isfjcall.jar)  
+In case of compiling in PC or Linux/Unix, you need isfjcall.jar and ibmjzos.jar which is included in IBM Java for z/OS. (/usr/include/java_classes/isfjcall.jar, /usr/lpp/java/J8.0_64/lib/ext/ibmjzos.jar).  
+After adding these jar files to CLASSPATH, build as follows:
+```
+javac zslack/*.java
+jar cvf zslack.jar zslack.properties zslack/*
+```
+
 # Reference
 [JZOS](https://www.ibm.com/support/knowledgecenter/SSYKE2_8.0.0/com.ibm.java.zsecurity.80.doc/zsecurity-component/jzos.html)  
 [Slack webhook](https://api.slack.com/incoming-webhooks)  
